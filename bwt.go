@@ -31,16 +31,15 @@ func Forward(word []byte) ([]byte, int) {
 }
 
 // reverses the bwt transform
+// reverses the bwt transform
 func Inverse(word []byte, num int) []byte {
-    index := num
     length := len(word)
     sorted := slices.Clone(word)
     slices.Sort(sorted)
     final := make([]byte, length)
-    start := make(map[byte]int)
-    seen := make(map[byte]int)
 
-    // build start once, from F
+    // start[c] = first row in F where c appears
+    start := make(map[byte]int)
     for i := range length {
         c := sorted[i]
         if _, ok := start[c]; !ok {
@@ -48,12 +47,21 @@ func Inverse(word []byte, num int) []byte {
         }
     }
 
-    // walk, filling final from the back
+    // rank[i] = which occurrence of word[i] this row is in L,
+    // counting rows from the top.
+    rank := make([]int, length)
+    count := make(map[byte]int)
+    for i := range length {
+        c := word[i]
+        count[c]++
+        rank[i] = count[c]
+    }
+
+    index := num
     for i := range length {
         current := word[index]
         final[length-1-i] = current
-        seen[current] += 1
-        index = start[current] + seen[current] - 1
+        index = start[current] + rank[index] - 1
     }
 
     return final

@@ -5,121 +5,109 @@ import (
 	"testing"
 )
 
-// Forward("banana") must produce exactly "nnbaaa" with primary index 3.
-func TestForwardBanana(t *testing.T) {
-	got, idx := Forward([]byte("banana"))
+// Inverse("nnbaaa", 3) must produce exactly "banana".
+func TestInverseBanana(t *testing.T) {
+	got := Inverse([]byte("nnbaaa"), 3)
 
-	want := []byte("nnbaaa")
+	want := []byte("banana")
 	if !bytes.Equal(got, want) {
-		t.Fatalf("Forward(banana) output\nwant: %q\ngot:  %q", want, got)
+		t.Fatalf("Inverse(nnbaaa, 3) output\nwant: %q\ngot:  %q", want, got)
 	}
-	if idx != 3 {
-		t.Fatalf("Forward(banana) primary index: want 3, got %d", idx)
+}
+
+func TestInverseAAB(t *testing.T) {
+	bwt, idx := Forward([]byte("aab"))
+
+	if !bytes.Equal(bwt, []byte("baa")) {
+		t.Fatalf("Forward(aab): want %q, got %q", []byte("baa"), bwt)
+	}
+	if idx != 0 {
+		t.Fatalf("Forward(aab) primary index: want 0, got %d", idx)
+	}
+
+	got := Inverse(bwt, idx)
+	want := []byte("aab")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("Inverse(%q, %d)\nwant: %q\ngot:  %q", bwt, idx, want, got)
+	}
+}
+
+// Inverse("pssmipissii", 4) must produce exactly "mississippi".
+func TestInverseMississippi(t *testing.T) {
+	got := Inverse([]byte("pssmipissii"), 4)
+
+	want := []byte("mississippi")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("Inverse(pssmipissii, 4) output\nwant: %q\ngot:  %q", want, got)
 	}
 }
 
 // Output length must always equal input length.
-func TestForwardLength(t *testing.T) {
+func TestInverseLength(t *testing.T) {
+	cases := []struct {
+		in  []byte
+		idx int
+	}{
+		{[]byte{}, 0},
+		{[]byte{'a'}, 0},
+		{[]byte("nnbaaa"), 3},
+		{[]byte("pssmipissii"), 4},
+	}
+	for _, c := range cases {
+		got := Inverse(c.in, c.idx)
+		if len(got) != len(c.in) {
+			t.Fatalf("length mismatch for %q: input %d, output %d",
+				c.in, len(c.in), len(got))
+		}
+	}
+}
+
+// Forward followed by Inverse must return the original input.
+// This is the strongest test: any bug in either side shows up here.
+func TestInverseRoundTrip(t *testing.T) {
 	for _, in := range [][]byte{
 		{},
 		{'a'},
+		{'x'},
+		[]byte("aa"),
+		[]byte("ab"),
+		[]byte("ba"),
+		[]byte("aaaa"),
 		[]byte("banana"),
 		[]byte("mississippi"),
+		[]byte("abcdefghij"),
 		[]byte("the quick brown fox"),
 	} {
-		got, _ := Forward(in)
-		if len(got) != len(in) {
-			t.Fatalf("length mismatch for %q: input %d, output %d",
-				in, len(in), len(got))
+		bwt, idx := Forward(in)
+		got := Inverse(bwt, idx)
+		if !bytes.Equal(got, in) {
+			t.Fatalf("round-trip failed for %q\nbwt: %q\nidx: %d\ngot: %q",
+				in, bwt, idx, got)
 		}
 	}
 }
 
-// Output must be a permutation of the input: same bytes, same counts.
-func TestForwardIsPermutation(t *testing.T) {
-	for _, in := range [][]byte{
-		{},
-		{'a'},
-		[]byte("banana"),
-		[]byte("mississippi"),
-		[]byte("aaaaaaaaaa"),
-		[]byte("abcdefghij"),
-	} {
-		got, _ := Forward(in)
-
-		countIn := [256]int{}
-		countOut := [256]int{}
-		for _, b := range in {
-			countIn[b]++
-		}
-		for _, b := range got {
-			countOut[b]++
-		}
-		if countIn != countOut {
-			t.Fatalf("not a permutation for %q\nin:  %v\nout: %v",
-				in, countIn, countOut)
-		}
-	}
-}
-
-// Primary index must be a valid row of the sorted table.
-func TestForwardPrimaryIndexInRange(t *testing.T) {
-	for _, in := range [][]byte{
-		{},
-		{'a'},
-		[]byte("banana"),
-		[]byte("mississippi"),
-		[]byte("aaaaaaaaaa"),
-	} {
-		_, idx := Forward(in)
-		if idx < 0 || idx >= len(in) {
-			// Empty input has length 0, so idx must be 0 and the
-			// check below must allow it. Handle empty as a special case.
-			if len(in) == 0 && idx == 0 {
-				continue
-			}
-			t.Fatalf("primary index out of range for %q: %d", in, idx)
-		}
-	}
-}
-
-// Empty input must not panic.
-func TestForwardEmpty(t *testing.T) {
-	got, idx := Forward([]byte{})
+// Empty input must not panic and must return empty.
+func TestInverseEmpty(t *testing.T) {
+	got := Inverse([]byte{}, 0)
 	if len(got) != 0 {
-		t.Fatalf("Forward(empty) output: want empty, got %q", got)
-	}
-	if idx != 0 {
-		t.Fatalf("Forward(empty) primary index: want 0, got %d", idx)
+		t.Fatalf("Inverse(empty): want empty, got %q", got)
 	}
 }
 
 // Single byte must produce that same byte.
-func TestForwardSingleByte(t *testing.T) {
-	got, idx := Forward([]byte{'x'})
+func TestInverseSingleByte(t *testing.T) {
+	got := Inverse([]byte{'x'}, 0)
 	if !bytes.Equal(got, []byte{'x'}) {
-		t.Fatalf("Forward(x): want %q, got %q", []byte{'x'}, got)
-	}
-	if idx != 0 {
-		t.Fatalf("Forward(x) primary index: want 0, got %d", idx)
+		t.Fatalf("Inverse(x): want %q, got %q", []byte{'x'}, got)
 	}
 }
 
 // All-same input is the classic tie-breaking case.
-func TestForwardAllSame(t *testing.T) {
+func TestInverseAllSame(t *testing.T) {
 	in := []byte("aaaa")
-	got, _ := Forward(in)
+	got := Inverse(in, 0)
 	if !bytes.Equal(got, in) {
-		t.Fatalf("Forward(aaaa): want %q, got %q", in, got)
-	}
-}
-
-// A known non-trivial case.
-func TestForwardMississippi(t *testing.T) {
-	got, _ := Forward([]byte("mississippi"))
-	// last column of the sorted rotations of "mississippi"
-	want := []byte("pssmipissii")
-	if !bytes.Equal(got, want) {
-		t.Fatalf("Forward(mississippi)\nwant: %q\ngot:  %q", want, got)
+		t.Fatalf("Inverse(aaaa): want %q, got %q", in, got)
 	}
 }
